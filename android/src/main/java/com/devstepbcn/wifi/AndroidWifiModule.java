@@ -285,13 +285,14 @@ public class AndroidWifiModule extends ReactContextBaseJavaModule {
 		if ( !enableNetwork ) {
 			return false;
 		}
-
+                forceWifiUsage(true);
 		return true;
 	}
 
 	//Disconnect current Wifi.
 	@ReactMethod
 	public void disconnect() {
+                forceWifiUsage(false);
 		wifi.disconnect();
 	}
 
@@ -351,11 +352,13 @@ public class AndroidWifiModule extends ReactContextBaseJavaModule {
 			if(wifiConfig.SSID.equals(comparableSSID)) {
 				wifi.removeNetwork(wifiConfig.networkId);
 				wifi.saveConfiguration();
-				callback.invoke(true);
-				return;
+//                                 callback.invoke(true);
+//                                 return;
 			}
 	    }
-		callback.invoke(false);
+//                 callback.invoke(false);
+		callback.invoke(true);
+                return;
 	}
 
 	@ReactMethod
