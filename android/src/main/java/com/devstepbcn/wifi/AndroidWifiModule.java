@@ -106,7 +106,10 @@ public class AndroidWifiModule extends ReactContextBaseJavaModule {
         if (useWifi) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
 
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    canWriteFlag = true;
+                    // Only need ACTION_MANAGE_WRITE_SETTINGS on 6.0.0, regular permissions suffice on later versions
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     canWriteFlag = Settings.System.canWrite(reactContext);
 
                     if (!canWriteFlag) {
@@ -211,7 +214,6 @@ public class AndroidWifiModule extends ReactContextBaseJavaModule {
 
     	// Quote ssid and password
 		conf.SSID = String.format("\"%s\"", ssid);
-    	conf.preSharedKey = String.format("\"%s\"", password);
 	
     	WifiConfiguration tempConfig = this.IsExist(conf.SSID);
 		if (tempConfig != null) {
@@ -238,6 +240,7 @@ public class AndroidWifiModule extends ReactContextBaseJavaModule {
 			conf.allowedProtocols.set(WifiConfiguration.Protocol.RSN);
 			conf.allowedProtocols.set(WifiConfiguration.Protocol.WPA);
 			conf.status = WifiConfiguration.Status.ENABLED;
+			conf.preSharedKey = String.format("\"%s\"", password);
       
 		} else if (capabilities.contains("WEP")) {
 			// This is needed for WEP
@@ -253,6 +256,10 @@ public class AndroidWifiModule extends ReactContextBaseJavaModule {
 		}
 
 		List<WifiConfiguration> mWifiConfigList = wifi.getConfiguredNetworks();
+		if (mWifiConfigList == null) {
+		    return false;
+        }
+
 		int updateNetwork = -1;
 
 		// Use the existing network config if exists
@@ -287,6 +294,84 @@ public class AndroidWifiModule extends ReactContextBaseJavaModule {
 		}
                 forceWifiUsage(true);
 		return true;
+	}
+
+
+	//add configuration of hidden network and return it's networkId
+	public int setWifiConfig(String ssid, String sharedKey) {
+		WifiConfiguration conf = new WifiConfiguration();
+
+		conf.SSID = "\"" + ssid + "\"";
+		conf.preSharedKey = "\"" + sharedKey + "\"";
+
+		conf.hiddenSSID = true;
+		conf.status = WifiConfiguration.Status.ENABLED;
+		conf.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.TKIP);
+		conf.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.CCMP);
+		conf.allowedKeyManagement.set(WifiConfiguration.KeyMgmt.WPA_PSK);
+		conf.allowedPairwiseCiphers.set(WifiConfiguration.PairwiseCipher.TKIP);
+		conf.allowedPairwiseCiphers.set(WifiConfiguration.PairwiseCipher.CCMP);
+		conf.allowedProtocols.set(WifiConfiguration.Protocol.RSN);
+		conf.allowedProtocols.set(WifiConfiguration.Protocol.WPA);
+
+		return wifi.addNetwork(conf);
+	}
+
+	//Add a hidden wifi network and connect to it
+	//Example:  wifi.connectToHiddenNetwork(ssid, password, (networkAdded) => {});
+	//Callback returns true if network added and tried to connect to it successfully
+	//It may take up to 15s to connect to hidden networks
+	@ReactMethod
+	public void connectToHiddenNetwork(String ssid, String password, Callback networkAdded) {
+		List<WifiConfiguration> list = wifi.getConfiguredNetworks();
+		if (list == null) {
+			networkAdded.invoke(false);
+		    return;
+        }
+		int updateNetwork = -1;
+
+		// check if network config exists and it's hidden
+		for (WifiConfiguration wifiConfig : list) {
+			if (wifiConfig.SSID.equals("\"" + ssid + "\"") && wifiConfig.hiddenSSID) {
+				updateNetwork = wifiConfig.networkId;
+			}
+		}
+
+		// If network not already in configured networks add new network
+		if (updateNetwork == -1) {
+			updateNetwork = setWifiConfig(ssid, password);
+		}
+
+		// if network not added return false
+		if (updateNetwork == -1) {
+			networkAdded.invoke(false);
+			return;
+		}
+
+		// disconnect current network
+		boolean disconnect = wifi.disconnect();
+		if (!disconnect) {
+			networkAdded.invoke(false);
+			return;
+		}
+
+		// enable new network
+		boolean enableNetwork = wifi.enableNetwork(updateNetwork, true);
+		if (!enableNetwork) {
+			networkAdded.invoke(false);
+			return;
+		}
+
+		// reconnect to new network
+		boolean reconnect = wifi.reconnect();
+		if (!reconnect) {
+			networkAdded.invoke(false);
+			return;
+		}
+
+		wifi.saveConfiguration();
+
+		networkAdded.invoke(true);
 	}
 
 	//Disconnect current Wifi.
@@ -346,7 +431,11 @@ public class AndroidWifiModule extends ReactContextBaseJavaModule {
 	//This method will remove the wifi network as per the passed SSID from the device list
 	@ReactMethod
 	public void isRemoveWifiNetwork(String ssid, final Callback callback) {
-	    List<WifiConfiguration> mWifiConfigList = wifi.getConfiguredNetworks();
+		List<WifiConfiguration> mWifiConfigList = wifi.getConfiguredNetworks();
+		if (mWifiConfigList == null) {
+            return;
+        }
+
 	    for (WifiConfiguration wifiConfig : mWifiConfigList) {
 			String comparableSSID = ('"' + ssid + '"'); //Add quotes because wifiConfig.SSID has them
 			if(wifiConfig.SSID.equals(comparableSSID)) {
@@ -364,7 +453,7 @@ public class AndroidWifiModule extends ReactContextBaseJavaModule {
 	@ReactMethod
 	public void reScanAndLoadWifiList(Callback successCallback, Callback errorCallback) {
 		WifiReceiver receiverWifi = new WifiReceiver(wifi, successCallback, errorCallback);
-	   	getReactApplicationContext().getCurrentActivity().registerReceiver(receiverWifi, new IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION));
+		getCurrentActivity().registerReceiver(receiverWifi, new IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION));
 	    wifi.startScan();
 	}
 
@@ -394,6 +483,10 @@ public class AndroidWifiModule extends ReactContextBaseJavaModule {
 
 	private WifiConfiguration IsExist(String SSID) {
 		List<WifiConfiguration> existingConfigs = wifi.getConfiguredNetworks();
+		if (existingConfigs == null) {
+			return null;
+		}
+
 		for (WifiConfiguration existingConfig : existingConfigs) {
 			if (existingConfig.SSID.equals("\"" + SSID + "\"")) {
 				return existingConfig;
