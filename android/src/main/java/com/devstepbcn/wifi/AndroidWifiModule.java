@@ -401,8 +401,11 @@ public class AndroidWifiModule extends ReactContextBaseJavaModule {
 		WifiInfo info = wifi.getConnectionInfo();
 
 		String bssid = info.getBSSID();
-
-		callback.invoke(bssid.toUpperCase());
+		if (bssid == null) {
+			callback.invoke(bssid);
+		} else {
+			callback.invoke(bssid.toUpperCase());
+		}
 	}
 
 	//This method will return current wifi signal strength
