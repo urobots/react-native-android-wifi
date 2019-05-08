@@ -187,6 +187,18 @@ wifi.forceWifiUsage(true);
 
 ```
 
+Method to get connection status of a forced network (because it takes some time to be set up).
+``` javascript
+//Callback returns true if the process of forcing network usage is finished
+wifi.connectionStatusOfBoundNetwork((isBound) => {
+    if (isBound) {
+        console.log('Network is bound');
+    } else {
+        console.log('Network isn\'t bound');
+    }
+});
+```
+
 Add a hidden wifi network and connect to it
 ``` javascript
 //Callback returns true if network added and tried to connect to it successfully

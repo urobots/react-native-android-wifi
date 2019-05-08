@@ -157,8 +157,20 @@ public class AndroidWifiModule extends ReactContextBaseJavaModule {
                 ConnectivityManager.setProcessDefaultNetwork(null);
             }
         }
-    }
-
+	}
+	
+	//Use this method to make sure that your forced network already bound
+	@ReactMethod
+	public void connectionStatusOfBoundNetwork(Callback connectionStatusResult) {
+		ConnectivityManager connManager = (ConnectivityManager) getReactApplicationContext().getSystemService(Context.CONNECTIVITY_SERVICE);
+		Network network = connManager.getBoundNetworkForProcess();
+		if (network != null) {
+			connectionStatusResult.invoke(true);
+		} else {
+			connectionStatusResult.invoke(false);
+		}
+	}
+	
 	//Method to check if wifi is enabled
 	@ReactMethod
 	public void isEnabled(Callback isEnabled) {
@@ -292,7 +304,7 @@ public class AndroidWifiModule extends ReactContextBaseJavaModule {
 		if ( !enableNetwork ) {
 			return false;
 		}
-                forceWifiUsage(true);
+
 		return true;
 	}
 
@@ -327,7 +339,8 @@ public class AndroidWifiModule extends ReactContextBaseJavaModule {
 		if (list == null) {
 			networkAdded.invoke(false);
 		    return;
-        }
+		}
+		
 		int updateNetwork = -1;
 
 		// check if network config exists and it's hidden
@@ -377,7 +390,6 @@ public class AndroidWifiModule extends ReactContextBaseJavaModule {
 	//Disconnect current Wifi.
 	@ReactMethod
 	public void disconnect() {
-                forceWifiUsage(false);
 		wifi.disconnect();
 	}
 
@@ -444,13 +456,12 @@ public class AndroidWifiModule extends ReactContextBaseJavaModule {
 			if(wifiConfig.SSID.equals(comparableSSID)) {
 				wifi.removeNetwork(wifiConfig.networkId);
 				wifi.saveConfiguration();
-//                                 callback.invoke(true);
-//                                 return;
+				callback.invoke(true);
+				return;
 			}
 	    }
-//                 callback.invoke(false);
-		callback.invoke(true);
-                return;
+
+		callback.invoke(false);
 	}
 
 	@ReactMethod
@@ -546,4 +557,3 @@ public class AndroidWifiModule extends ReactContextBaseJavaModule {
 		}
 	}
 }
-
